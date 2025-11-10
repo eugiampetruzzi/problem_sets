@@ -31,14 +31,19 @@ knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
 # Step 1: Load packages
 
 ```{r}
+#install.packages("labelled")
+```
+
+
+```{r}
 library(tidyverse) # for data munging
 library(knitr) # for kable table formating
 library(haven) # import and export 'SPSS', 'Stata' and 'SAS' Files
 library(readxl) # import excel files
 
 # #optional packages:
-# library(broom)
-# library(labelled)# converts SPSS's labelled to R's factor 
+library(broom)
+library(labelled) # converts SPSS's labelled to R's factor 
 ```
 
 # Step 2: Load data
@@ -51,7 +56,36 @@ d <- read_sav('data/Empathy Gap Study 1 data.sav')
 # Step 3: Tidy data
 
 ```{r}
+str(d)
+names(d)
+sapply(d, function(x) attr(x, "label"))
+```
 
+
+```{r}
+
+#clean vars
+cond_raw <- as.character(haven::as_factor(d$condition))
+exch_raw <- as.character(haven::as_factor(d$exchangeinfo))
+
+unique(cond_raw); unique(exch_raw)
+
+to_low <- function(x) trimws(tolower(x))
+cond <- to_low(cond_raw)
+exch <- to_low(exch_raw)
+
+#two levels 
+cond[grepl("hyp", cond)]  <- "hypothetical"
+cond[grepl("^real$", cond)] <- "real"
+
+exch[grepl("^(yes|exchange|accepted|agree|agreed)$", exch)] <- "yes"
+exch[grepl("^(no|reject|decline|refuse|refused|did not exchange)$", exch)] <- "no"
+
+#factors
+keep <- !is.na(cond) & !is.na(exch) & cond %in% c("hypothetical","real") & exch %in% c("no","yes")
+dat  <- data.frame(condition = factor(cond[keep], levels = c("hypothetical","real")),
+                   exchanged = factor(exch[keep], levels = c("no","yes")))
+nrow(dat)  # should be 132
 ```
 
 # Step 4: Run analysis
@@ -62,7 +96,19 @@ d <- read_sav('data/Empathy Gap Study 1 data.sav')
 
 ```{r}
 # reproduce the above results here
+# 2x2 counts
+xt <- table(dat$condition, dat$exchanged)
+xt
 
+# per-condition totals and yes counts/percentages
+totals <- rowSums(xt)
+yes    <- xt[,"yes"]
+perc   <- round(100 * yes / totals)
+
+data.frame(condition = rownames(xt),
+           yes = as.integer(yes),
+           total = as.integer(totals),
+           percent_yes = perc)
 ```
 
 ## Inferential statistics
@@ -73,21 +119,27 @@ Hint: if you are using the function chisq.test(), make sure to set the continuit
 
 ```{r}
 # reproduce the above results here
-
+stats::chisq.test(xt, correct = FALSE)
+c(
+  statistic = unname(stats::chisq.test(xt, correct = FALSE)$statistic),
+  df        = unname(stats::chisq.test(xt, correct = FALSE)$parameter),
+  p_value   = unname(stats::chisq.test(xt, correct = FALSE)$p.value),
+  N         = sum(xt)
+)
 ```
 
 # Step 5: Reflection
 
 Were you able to reproduce the results you attempted to reproduce? If not, what part(s) were you unable to reproduce?
 
-> ANSWER HERE
+> Yes
 
 How difficult was it to reproduce your results? 
 
-> ANSWER HERE
+> It was not difficult.
 
 What aspects made it difficult? What aspects made it easy?
 
-> ANSWER HERE
+> I don't think this counts as a difficulty since it's just the nature of the data but the only hurdle was first confirming which variables represented condition and participant decision, since they had so many columns. Clear documentation in both the dataset and paper made it easy to verify. Learning more about tidyverse through this class + the stats bootcamp helped a lot.
 
 
